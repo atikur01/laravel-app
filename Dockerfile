@@ -1,27 +1,27 @@
 # ==========================================
-# Laravel Dockerfile for Render (fixed 403)
+# Laravel + WebDevOps Dockerfile (Render fix)
 # ==========================================
 FROM webdevops/php-nginx:8.2-alpine
 
-# Use root for build
+# --- Work as root for build steps
 USER root
 
-# Set working directory
+# --- Set working directory
 WORKDIR /app
 
-# Set Laravel public directory as web root
+# --- Tell Nginx to use Laravel's public directory
 ENV WEB_DOCUMENT_ROOT=/app/public
 
-# Copy your Laravel app
+# --- Copy Laravel application
 COPY ./app /app
 
-# Install Composer dependencies
+# --- Install dependencies and fix permissions
 RUN composer install --no-interaction --no-dev --optimize-autoloader && \
     mkdir -p /app/storage /app/bootstrap/cache && \
     chmod -R 775 /app/storage /app/bootstrap/cache || true
 
-# Expose port 80 (Nginx)
+# --- Expose Nginx port
 EXPOSE 80
 
-# Start Nginx + PHP-FPM
+# --- Start the built-in supervisor (runs Nginx + PHP-FPM)
 CMD ["/usr/bin/supervisord"]
