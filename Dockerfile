@@ -1,12 +1,40 @@
-FROM webdevops/php-nginx:8.2
+FROM php:8.2-apache
 
-WORKDIR /app
-COPY ./app /app
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    libzip-dev \
+    zip \
+    unzip \
+    curl \
+    git
 
-ENV WEB_DOCUMENT_ROOT=/app/public
-ENV APP_ENV=production
+# Enable mod_rewrite
+RUN a2enmod rewrite
 
-ENV APP_DEBUG=false
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql zip
 
+# Set the Apache document root to your Laravel app/public folder
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/app/public
 
-RUN composer install --no-interaction --no-progress --prefer-dist --no-scripts
+RUN sed -ri -e "s!/var/www/html!${APACHE_DOCUMENT_ROOT}!g" /etc/apache2/sites-available/*.conf
+RUN sed -ri -e "s!/var/www/!${APACHE_DOCUMENT_ROOT}!g" /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# Copy the application code
+COPY . /var/www/html
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Install composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Install project dependencies
+RUN composer install --no-dev --optimize-autoloader
+
+# Set permissions for storage and cache
+RUN chown -R www-data:www-data /var/www/html/app/storage /var/www/html/app/bootstrap/cache
+
+# Expose port 80
+EXPOSE 80
