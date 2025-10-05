@@ -1,53 +1,48 @@
-FROM php:8.2-apache
+# Stage 1: Build stage
+FROM laravelphp/php-fpm:8.2-fpm-alpine AS builder
 
 # Set working directory
 WORKDIR /var/www/html
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
+    bash \
     git \
-    curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
     unzip \
+    sqlite \
     libzip-dev \
-    nodejs \
-    npm
+    oniguruma-dev \
+    curl \
+    && docker-php-ext-install pdo pdo_sqlite zip mbstring
 
-# Clear cache
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+# Copy composer and install dependencies
+COPY composer.json composer.lock ./
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    && php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
+    && php -r "unlink('composer-setup.php');"
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+RUN composer install --no-dev --optimize-autoloader
 
-# Enable Apache modules
-RUN a2enmod rewrite
-
-# Install composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# Copy application code
+# Copy the rest of the application
 COPY . .
 
-# Set proper permissions
-RUN chgrp -R www-data /var/www/html/storage \
-    && chgrp -R www-data /var/www/html/bootstrap/cache \
-    && chmod -R g+w /var/www/html/storage \
-    && chmod -R g+w /var/www/html/bootstrap/cache
+# Stage 2: Production stage
+FROM laravelphp/php-fpm:8.2-fpm-alpine
 
-# Install PHP dependencies
-RUN composer install --no-scripts --no-autoloader
+WORKDIR /var/www/html
 
-# Install Node.js dependencies
-RUN npm install
+# Install runtime dependencies
+RUN apk add --no-cache sqlite libzip oniguruma
 
-# Copy Apache virtual host configuration
-COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
+# Copy built application from builder
+COPY --from=builder /var/www/html /var/www/html
 
-# Expose port for php artisan serve
-EXPOSE 8000:80
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Start Apache
-CMD ["apache2-foreground"]
+# Expose port (optional if using with reverse proxy)
+EXPOSE 9000
+
+CMD ["php-fpm"]
