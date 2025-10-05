@@ -1,34 +1,53 @@
-# Use official PHP image
-FROM php:8.3.10-fpm
-
-# Install system dependencies
-RUN apt-get update -y && \
-    apt-get install -y \
-    libpq-dev \
-    git \
-    unzip \
-    zip \
-    curl \
-    libonig-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install PHP extensions required by Laravel
-RUN docker-php-ext-install pdo pdo_pgsql mbstring bcmath
-
-# Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+FROM php:8.2-apache
 
 # Set working directory
-WORKDIR /app
+WORKDIR /var/www/html
 
-# Copy application files
-COPY . /app
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    libzip-dev \
+    nodejs \
+    npm
 
-# Install PHP dependencies via Composer
-RUN composer install --no-dev --optimize-autoloader
+# Clear cache
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Expose port 80
-EXPOSE 80
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
-# Start PHP-FPM
-CMD ["php-fpm"]
+# Enable Apache modules
+RUN a2enmod rewrite
+
+# Install composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Copy application code
+COPY . .
+
+# Set proper permissions
+RUN chgrp -R www-data /var/www/html/storage \
+    && chgrp -R www-data /var/www/html/bootstrap/cache \
+    && chmod -R g+w /var/www/html/storage \
+    && chmod -R g+w /var/www/html/bootstrap/cache
+
+# Install PHP dependencies
+RUN composer install --no-scripts --no-autoloader
+
+# Install Node.js dependencies
+RUN npm install
+
+# Copy Apache virtual host configuration
+COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
+
+# Expose port for php artisan serve
+EXPOSE 8000:80
+
+# Start Apache
+CMD ["apache2-foreground"]
