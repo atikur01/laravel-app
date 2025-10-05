@@ -1,48 +1,28 @@
-# Stage 1: Build stage
-FROM laravelphp/php-fpm:8.2-fpm-alpine AS builder
+# Use WebDevOps PHP Apache image
+FROM webdevops/php-apache:8.2
 
 # Set working directory
-WORKDIR /var/www/html
+WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache \
-    bash \
-    git \
-    unzip \
-    sqlite \
-    libzip-dev \
-    oniguruma-dev \
-    curl \
-    && docker-php-ext-install pdo pdo_sqlite zip mbstring
+# Enable PHP extensions required by Laravel + SQLite
+RUN docker-php-ext-install pdo pdo_sqlite
 
-# Copy composer and install dependencies
+# Copy composer files first for better caching
 COPY composer.json composer.lock ./
-RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
-    && php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
-    && php -r "unlink('composer-setup.php');"
 
-RUN composer install --no-dev --optimize-autoloader
+# Install Composer and dependencies
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+    && composer install --no-dev --optimize-autoloader
 
 # Copy the rest of the application
 COPY . .
 
-# Stage 2: Production stage
-FROM laravelphp/php-fpm:8.2-fpm-alpine
+# Set permissions for Laravel
+RUN chown -R application:application /app \
+    && chmod -R 755 /app/storage /app/bootstrap/cache
 
-WORKDIR /var/www/html
+# Expose port 80 (Apache)
+EXPOSE 80
 
-# Install runtime dependencies
-RUN apk add --no-cache sqlite libzip oniguruma
-
-# Copy built application from builder
-COPY --from=builder /var/www/html /var/www/html
-
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
-
-# Expose port (optional if using with reverse proxy)
-EXPOSE 9000
-
-CMD ["php-fpm"]
+# Start Apache in foreground (WebDevOps default entrypoint)
+CMD ["supervisord"]
