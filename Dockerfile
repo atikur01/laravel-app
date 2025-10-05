@@ -1,32 +1,28 @@
-# ==============================
-# Laravel App Dockerfile (fixed)
-# Using WebDevOps PHP-Nginx base image
-# ==============================
+# ==========================================
+# Laravel Dockerfile (Render-compatible)
+# ==========================================
 
 FROM webdevops/php-nginx:8.2-alpine
 
-# Switch to root to run privileged commands
+# Use root commands safely in build stage
 USER root
 
 # Set working directory
 WORKDIR /app
 
-# Copy Laravel app
+# Copy Laravel app files
 COPY ./app /app
 
-# Install Composer dependencies
-RUN composer install --no-interaction --no-dev --optimize-autoloader
+# Install dependencies and set permissions in one step
+RUN composer install --no-interaction --no-dev --optimize-autoloader && \
+    mkdir -p /app/storage /app/bootstrap/cache && \
+    chmod -R 775 /app/storage /app/bootstrap/cache || true
 
-# Fix permissions for Laravel storage and cache
-RUN mkdir -p /app/storage /app/bootstrap/cache && \
-    chown -R application:application /app && \
-    chmod -R 775 /app/storage /app/bootstrap/cache
+# Don’t switch users — Render runs as non-root automatically
+# USER application  <-- REMOVE this
 
-# Switch back to unprivileged user for runtime
-USER application
-
-# Expose port 80 (Nginx)
+# Expose port 80
 EXPOSE 80
 
-# Start Nginx and PHP-FPM via supervisor
+# Use the built-in supervisor to start PHP-FPM + Nginx
 CMD ["/usr/bin/supervisord"]
