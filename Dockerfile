@@ -4,8 +4,8 @@ FROM webdevops/php-apache:8.2
 # Set working directory
 WORKDIR /app
 
-# Enable PHP extensions required by Laravel + SQLite
-RUN docker-php-ext-install pdo pdo_sqlite
+# Enable SQLite PDO extension
+RUN /usr/local/bin/docker-php-ext-enable pdo_sqlite
 
 # Copy composer files first for better caching
 COPY composer.json composer.lock ./
