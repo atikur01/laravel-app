@@ -1,28 +1,32 @@
 # ==============================
-# Laravel App Dockerfile
+# Laravel App Dockerfile (fixed)
 # Using WebDevOps PHP-Nginx base image
 # ==============================
 
 FROM webdevops/php-nginx:8.2-alpine
 
-# Set working directory inside container
+# Switch to root to run privileged commands
+USER root
+
+# Set working directory
 WORKDIR /app
 
-# Copy Laravel app files into container
+# Copy Laravel app
 COPY ./app /app
-
-# Copy environment file if needed (optional)
-# COPY ./app/.env /app/.env
 
 # Install Composer dependencies
 RUN composer install --no-interaction --no-dev --optimize-autoloader
 
-# Set proper permissions for Laravel storage and cache
-RUN chown -R application:application /app && \
+# Fix permissions for Laravel storage and cache
+RUN mkdir -p /app/storage /app/bootstrap/cache && \
+    chown -R application:application /app && \
     chmod -R 775 /app/storage /app/bootstrap/cache
 
-# Expose the default Nginx port
+# Switch back to unprivileged user for runtime
+USER application
+
+# Expose port 80 (Nginx)
 EXPOSE 80
 
-# Start Nginx and PHP-FPM (handled by base image’s supervisor)
+# Start Nginx and PHP-FPM via supervisor
 CMD ["/usr/bin/supervisord"]
